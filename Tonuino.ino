@@ -166,19 +166,26 @@ byte blockAddr = 4;
 byte trailerBlock = 7;
 MFRC522::StatusCode status;
 
-#define buttonPause A0
-#define buttonUp A1
-#define buttonDown A2
+#define buttonPrev A0
+#define buttonMinus A1
+#define buttonPause A2
+#define buttonPlus A3
+#define buttonNext A
 #define busyPin 4
 
 #define LONG_PRESS 1000
 
 Button pauseButton(buttonPause);
-Button upButton(buttonUp);
-Button downButton(buttonDown);
+Button plusButton(buttonPlus);
+Button minusButton(buttonMinus);
+Button prevButton(buttonPrev);
+Button nextButton(buttonNext);
+
 bool ignorePauseButton = false;
-bool ignoreUpButton = false;
-bool ignoreDownButton = false;
+bool ignorePlusButton = false;
+bool ignoreMinusButton = false;
+bool ignorePrevButton = false;
+bool ignoreNextButton = false;
 
 uint8_t numberOfCards = 0;
 
@@ -195,8 +202,10 @@ void setup() {
 
   // Knöpfe mit PullUp
   pinMode(buttonPause, INPUT_PULLUP);
-  pinMode(buttonUp, INPUT_PULLUP);
-  pinMode(buttonDown, INPUT_PULLUP);
+  pinMode(buttonPlus, INPUT_PULLUP);
+  pinMode(buttonMinus, INPUT_PULLUP);
+  pinMode(buttonPrev, INPUT_PULLUP);
+  pinMode(buttonNext, INPUT_PULLUP);
 
   // Busy Pin
   pinMode(busyPin, INPUT);
@@ -214,10 +223,9 @@ void setup() {
     key.keyByte[i] = 0xFF;
   }
 
-  // RESET --- ALLE DREI KNÖPFE BEIM STARTEN GEDRÜCKT HALTEN -> alle bekannten
-  // Karten werden gelöscht
-  if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
-      digitalRead(buttonDown) == LOW) {
+  // RESET --- press Pause, Previous and Plus button during startup do erase all known cards
+  if (digitalRead(buttonPause) == LOW && digitalRead(buttonPrev) == LOW &&
+      digitalRead(buttonPlus) == LOW) {
     Serial.println(F("Reset -> EEPROM wird gelöscht"));
     for (int i = 0; i < EEPROM.length(); i++) {
       EEPROM.write(i, 0);
@@ -232,9 +240,12 @@ void loop() {
     // Buttons werden nun über JS_Button gehandelt, dadurch kann jede Taste
     // doppelt belegt werden
     pauseButton.read();
-    upButton.read();
-    downButton.read();
+    plusButton.read();
+    minusButton.read();
+    prevButton.read();
+    nextButton.read();
 
+    // handling of pause button
     if (pauseButton.wasReleased()) {
       if (ignorePauseButton == false) {
         if (isPlaying())
@@ -258,28 +269,26 @@ void loop() {
       ignorePauseButton = true;
     }
 
-    if (upButton.pressedFor(LONG_PRESS)) {
-      Serial.println(F("Volume Up"));
+    // handling of plus button
+    if (plusButton.wasReleased()) {
       mp3.increaseVolume();
-      ignoreUpButton = true;
-    } else if (upButton.wasReleased()) {
-      if (!ignoreUpButton)
-        nextTrack(random(65536));
-      else
-        ignoreUpButton = false;
     }
-
-    if (downButton.pressedFor(LONG_PRESS)) {
-      Serial.println(F("Volume Down"));
+    
+    // handling of minus button
+    if (minusButton.wasReleased()) {
       mp3.decreaseVolume();
-      ignoreDownButton = true;
-    } else if (downButton.wasReleased()) {
-      if (!ignoreDownButton)
-        previousTrack();
-      else
-        ignoreDownButton = false;
     }
-    // Ende der Buttons
+    
+    // handling of previous button
+    if (prevButton.wasReleased()) {
+      previousTrack();
+    }
+    
+    // handling of next button
+    if (nextButton.wasReleased()) {
+      nextTrack(random(65536));
+    }
+    
   } while (!mfrc522.PICC_IsNewCardPresent());
 
   // RFID Karte wurde aufgelegt
@@ -350,8 +359,8 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
     mp3.playMp3FolderTrack(startMessage);
   do {
     pauseButton.read();
-    upButton.read();
-    downButton.read();
+    plusButton.read();
+    minusButton.read();
     mp3.loop();
     if (pauseButton.wasPressed()) {
       if (returnValue != 0)
@@ -359,7 +368,7 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
       delay(1000);
     }
 
-    if (upButton.pressedFor(LONG_PRESS)) {
+    if (plusButton.pressedFor(LONG_PRESS)) {
       returnValue = min(returnValue + 10, numberOfOptions);
       mp3.playMp3FolderTrack(messageOffset + returnValue);
       delay(1000);
@@ -372,9 +381,9 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
         else
           mp3.playFolderTrack(previewFromFolder, returnValue);
       }
-      ignoreUpButton = true;
-    } else if (upButton.wasReleased()) {
-      if (!ignoreUpButton) {
+      ignorePlusButton = true;
+    } else if (plusButton.wasReleased()) {
+      if (!ignorePlusButton) {
         returnValue = min(returnValue + 1, numberOfOptions);
         mp3.playMp3FolderTrack(messageOffset + returnValue);
         delay(1000);
@@ -388,10 +397,10 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
             mp3.playFolderTrack(previewFromFolder, returnValue);
         }
       } else
-        ignoreUpButton = false;
+        ignorePlusButton = false;
     }
     
-    if (downButton.pressedFor(LONG_PRESS)) {
+    if (minusButton.pressedFor(LONG_PRESS)) {
       returnValue = max(returnValue - 10, 1);
       mp3.playMp3FolderTrack(messageOffset + returnValue);
       delay(1000);
@@ -404,9 +413,9 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
         else
           mp3.playFolderTrack(previewFromFolder, returnValue);
       }
-      ignoreDownButton = true;
-    } else if (downButton.wasReleased()) {
-      if (!ignoreDownButton) {
+      ignoreMinusButton = true;
+    } else if (minusButton.wasReleased()) {
+      if (!ignoreMinusButton) {
         returnValue = max(returnValue - 1, 1);
         mp3.playMp3FolderTrack(messageOffset + returnValue);
         delay(1000);
@@ -420,7 +429,7 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
             mp3.playFolderTrack(previewFromFolder, returnValue);
         }
       } else
-        ignoreDownButton = false;
+        ignoreMinusButton = false;
     }
   } while (true);
 }
@@ -428,10 +437,10 @@ int voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
 void resetCard() {
   do {
     pauseButton.read();
-    upButton.read();
-    downButton.read();
+    plusButton.read();
+    minusButton.read();
 
-    if (upButton.wasReleased() || downButton.wasReleased()) {
+    if (plusButton.wasReleased() || minusButton.wasReleased()) {
       Serial.print(F("Abgebrochen!"));
       mp3.playMp3FolderTrack(802);
       return;

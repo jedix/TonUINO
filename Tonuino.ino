@@ -170,7 +170,7 @@ MFRC522::StatusCode status;
 #define buttonMinus A1
 #define buttonPause A2
 #define buttonPlus A3
-#define buttonNext A
+#define buttonNext A4
 #define busyPin 4
 
 #define LONG_PRESS 1000
